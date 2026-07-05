@@ -3,8 +3,9 @@
 Uso: uv run python -m credit_risk.train
 """
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
+import mlflow
 import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
@@ -84,8 +85,12 @@ def evaluate(
     }
 
 
-def train(config: TrainConfig = TrainConfig()) -> dict[str, float]:
-    """Orquestra: load -> clean -> features -> split -> pipeline -> evaluate."""
+def train(config: TrainConfig = TrainConfig()) -> tuple[Pipeline, dict[str, float], pd.DataFrame]:
+    """Orquestra: load -> clean -> features -> split -> pipeline -> evaluate.
+
+    Devolve também um exemplo de entrada (linhas do X_train) para o MLflow
+    inferir a assinatura do modelo — o contrato que a API validará.
+    """
     logger.info("Carregando e preparando dados")
     df = add_features(clean(load_raw()))
 
@@ -95,9 +100,33 @@ def train(config: TrainConfig = TrainConfig()) -> dict[str, float]:
     pipe = build_pipeline(config)
     metrics = evaluate(pipe, X_train, y_train, X_test, y_test, config)
     logger.info("Métricas: %s", metrics)
-    return metrics
+    return pipe, metrics, X_train.head(5)
+
+
+def run_experiment(config: TrainConfig = TrainConfig()) -> None:
+    """Envolve o treino com tracking: params, métricas e modelo numa run do MLflow."""
+    mlflow.set_experiment("credit-risk")
+    with mlflow.start_run():
+        pipe, metrics, input_example = train(config)
+        mlflow.log_params(asdict(config))   # o dataclass vira params de uma vez
+        mlflow.log_metrics(metrics)         # o dict do evaluate cai direto
+        mlflow.sklearn.log_model(
+            pipe,                           # o Pipeline INTEIRO, com imputer e scaler
+            name="model",
+            input_example=input_example,
+            # mlflow 3.x serializa com skops, que audita tipos por segurança;
+            # numpy.dtype é usado internamente pelo StandardScaler e é seguro
+            skops_trusted_types=["numpy.dtype"],
+        )
 
 
 if __name__ == "__main__":
+    import sys
+
+    from dotenv import load_dotenv
+
+    # console do Windows usa cp1252, que não representa os emojis dos logs do MLflow
+    sys.stdout.reconfigure(encoding="utf-8")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    train()
+    load_dotenv()  # MLFLOW_TRACKING_URI, credenciais do MinIO etc. (ml/.env)
+    run_experiment()

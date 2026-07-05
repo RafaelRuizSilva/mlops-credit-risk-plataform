@@ -1,3 +1,9 @@
 .venv/
 __pycache__/
 .ipynb_checkpoints/
+
+# dados nunca vao pro git (Kaggle terms + tamanho); DVC assume depois
+ml/data/
+
+# segredos
+.env
