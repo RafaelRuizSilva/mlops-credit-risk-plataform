@@ -1,0 +1,6 @@
+# nada disso entra na imagem — em especial o .env (segredos!)
+.venv/
+.env
+tests/
+__pycache__/
+.pytest_cache/

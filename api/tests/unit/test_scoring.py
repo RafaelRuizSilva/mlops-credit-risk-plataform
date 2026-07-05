@@ -5,6 +5,7 @@ sem MLflow, Postgres ou FastAPI existirem.
 """
 import pytest
 
+from credit_risk_api.domain.exceptions import PredictionLogError
 from credit_risk_api.domain.models import CreditApplication, RiskBand, RiskScore
 from credit_risk_api.domain.scoring import ScoringService
 
@@ -34,7 +35,9 @@ class SpyPredictionLogger:
 
 class FailingPredictionLogger:
     def log(self, application: CreditApplication, score: RiskScore) -> None:
-        raise ConnectionError("banco indisponível")
+        # contrato de erros da port: o adapter traduz a exceção da tecnologia
+        # (psycopg.Error etc.) para a exceção do DOMÍNIO antes de subir
+        raise PredictionLogError("banco indisponível")
 
 
 @pytest.fixture
@@ -82,7 +85,7 @@ class TestScore:
     def test_falha_do_logger_derruba_a_avaliacao(self, application):
         # fail-closed: predição sem registro de auditoria não é devolvida
         service, _ = make_service(logger=FailingPredictionLogger())
-        with pytest.raises(ConnectionError):
+        with pytest.raises(PredictionLogError):
             service.score(application)
 
 
