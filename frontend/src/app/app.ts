@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { PercentPipe } from '@angular/common';
 
+import { isDemoMode } from './demo-model';
 import { PredictionRequest, PredictionResponse, PredictionService } from './prediction.service';
 
 @Component({
@@ -17,6 +18,7 @@ export class App {
   protected readonly result = signal<PredictionResponse | null>(null);
   protected readonly loading = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly demo = isDemoMode();
 
   // validações espelham o schema Pydantic (o 422 da API é a segunda linha de defesa)
   protected readonly form = this.fb.nonNullable.group({

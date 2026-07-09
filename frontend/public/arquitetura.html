@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Credit Risk Platform — Arquitetura Interativa</title>
+<style>
+  :root {
+    --ground: #f5f7fa; --surface: #ffffff; --surface-2: #eef2f7; --border: #d7dde6;
+    --ink: #1d2530; --ink-2: #4a5568; --muted: #67728a;
+    --accent: #2a78d6; --accent-soft: #e3edfa;
+    --aws: #e88b00; --aws-soft: #fdf1dd;
+    --edge: #c2cad6; --edge-active: #2a78d6; --dim: 0.22;
+    --hot: #d64545; --before: #2a78d6; --after: #2e9e6b;
+    --mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #12161d; --surface: #1a202a; --surface-2: #232b38; --border: #38414f;
+      --ink: #e7ebf1; --ink-2: #b6bfcd; --muted: #8792a5;
+      --accent: #4a90e2; --accent-soft: #1d3557;
+      --aws: #f5a623; --aws-soft: #3a2d12;
+      --edge: #465163; --edge-active: #4a90e2;
+      --hot: #ef6a6a; --before: #4a90e2; --after: #57c07f;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #f5f7fa; --surface: #ffffff; --surface-2: #eef2f7; --border: #d7dde6;
+    --ink: #1d2530; --ink-2: #4a5568; --muted: #67728a;
+    --accent: #2a78d6; --accent-soft: #e3edfa;
+    --aws: #e88b00; --aws-soft: #fdf1dd;
+    --edge: #c2cad6; --edge-active: #2a78d6;
+    --hot: #d64545; --before: #2a78d6; --after: #2e9e6b;
+  }
+  :root[data-theme="dark"] {
+    --ground: #12161d; --surface: #1a202a; --surface-2: #232b38; --border: #38414f;
+    --ink: #e7ebf1; --ink-2: #b6bfcd; --muted: #8792a5;
+    --accent: #4a90e2; --accent-soft: #1d3557;
+    --aws: #f5a623; --aws-soft: #3a2d12;
+    --edge: #465163; --edge-active: #4a90e2;
+    --hot: #ef6a6a; --before: #4a90e2; --after: #57c07f;
+  }
+
+  body { margin: 0; background: var(--ground); color: var(--ink);
+         font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; line-height: 1.5;
+         padding: 2rem 1rem 4rem; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .eyebrow { font-size: .75rem; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin: 0 0 .35rem; }
+  h1 { margin: 0 0 .3rem; font-size: 1.8rem; text-wrap: balance; }
+  .lede { color: var(--ink-2); margin: 0 0 1.2rem; max-width: 72ch; }
+
+  .toolbar { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+  .flowbtn, .modebtn { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2);
+             border-radius: 999px; padding: .4rem 1rem; font-size: .85rem; cursor: pointer; font: inherit; }
+  .flowbtn:hover { border-color: var(--accent); }
+  .flowbtn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .modes { margin-left: auto; display: flex; gap: 0; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+  .modebtn { border: none; border-radius: 0; }
+  .modebtn.active[data-mode="local"] { background: var(--accent); color: #fff; }
+  .modebtn.active[data-mode="aws"] { background: var(--aws); color: #fff; }
+  .flowbtn:focus-visible, .modebtn:focus-visible, .node:focus-visible, .stepbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1rem; align-items: start; }
+  @media (max-width: 900px) { .stage { grid-template-columns: 1fr; } }
+
+  .board-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  .board { position: relative; min-width: 760px; padding: 1.5rem; }
+  svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+  .wire { fill: none; stroke: var(--edge); stroke-width: 1.5; stroke-linejoin: round; transition: opacity .25s, stroke .25s; }
+  .wire.on { stroke: var(--edge-active); stroke-width: 2.5; }
+  .wire.dim { opacity: var(--dim); }
+  .wire-label { display: none; font-size: 11px; font-weight: 600; fill: var(--edge-active);
+                paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
+  .wire-label.on { display: block; }
+  body.aws .wire.on { stroke: var(--aws); }
+  body.aws .wire-label { fill: var(--aws); }
+  body.aws .node.sel, body.aws .node.on { border-color: var(--aws); box-shadow: 0 0 0 3px var(--aws-soft); }
+  body.aws .compose { border-color: var(--aws); }
+  body.aws .compose .coltag { color: var(--aws); }
+
+  .board-inner { position: relative; z-index: 2; display: grid; grid-template-columns: 200px 1fr; gap: 2.2rem; }
+  .hostcol { display: flex; flex-direction: column; gap: 2rem; align-self: start; }
+  .coltag { font-size: .68rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .compose { border: 1.5px dashed var(--accent); border-radius: 12px; padding: 1.1rem 1.1rem 1.3rem; display: flex; flex-direction: column; gap: 2.4rem; }
+  .compose .coltag { color: var(--accent); margin: -0.2rem 0 -1.2rem; }
+  .row { display: grid; gap: 1.6rem; }
+  .r1 { grid-template-columns: 1fr 1fr; }
+  .r3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  .node { position: relative; z-index: 2; display: flex; gap: .6rem; align-items: center;
+          border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface);
+          padding: .55rem .7rem; cursor: pointer; text-align: left; font: inherit; color: inherit;
+          transition: opacity .25s, border-color .2s, box-shadow .2s; }
+  .node:hover { border-color: var(--accent); }
+  body.aws .node:hover { border-color: var(--aws); }
+  .node.job { border-style: dashed; }
+  .node.sel, .node.on { border-color: var(--edge-active); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .node.dim { opacity: var(--dim); }
+  .node .ic { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; }
+  .node .ic svg { width: 18px; height: 18px; display: block; }
+  .node b { font-size: .82rem; font-family: var(--mono); display: block; }
+  .node small { font-size: .68rem; color: var(--muted); display: block; line-height: 1.3; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: .3rem; vertical-align: 1px; }
+  .dot.quente { background: var(--hot); } .dot.antes { background: var(--before); } .dot.depois { background: var(--after); }
+
+  .legend { display: flex; gap: 1.1rem; flex-wrap: wrap; margin-top: .8rem; font-size: .78rem; color: var(--ink-2); }
+  .legend b { font-weight: 600; }
+
+  .moments { margin-top: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: .8rem; }
+  .moment { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: .7rem .9rem; font-size: .82rem; color: var(--ink-2); }
+  .moment b { display: block; color: var(--ink); margin-bottom: .2rem; font-size: .85rem; }
+  .moment .who { font-family: var(--mono); font-size: .72rem; color: var(--muted); display: block; margin-top: .35rem; }
+
+  .panel { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 1rem 1.1rem; position: sticky; top: 1rem; }
+  .panel h3 { margin: 0 0 .1rem; font-size: 1.02rem; display: flex; align-items: center; gap: .5rem; }
+  .panel .cat { font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: .7rem; }
+  .panel dl { margin: 0; display: flex; flex-direction: column; gap: .6rem; }
+  .panel dt { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); font-weight: 600; }
+  body.aws .panel dt { color: var(--aws); }
+  .panel dd { margin: .1rem 0 0; font-size: .84rem; color: var(--ink-2); }
+  .panel .hint { color: var(--muted); font-size: .85rem; }
+  .conns { margin-top: .7rem; }
+  .conns span { display: inline-block; background: var(--surface-2); border-radius: 6px; padding: .1rem .5rem;
+                font-size: .72rem; font-family: var(--mono); margin: 0 .25rem .25rem 0; color: var(--ink-2); }
+
+  .story { margin-top: 1rem; border: 1px solid var(--border); border-left: 4px solid var(--accent);
+           border-radius: 10px; background: var(--surface); padding: .8rem 1rem;
+           display: none; gap: 1rem; align-items: center; }
+  body.aws .story { border-left-color: var(--aws); }
+  .story.show { display: flex; }
+  .story .txt { flex: 1; font-size: .9rem; color: var(--ink-2); }
+  .story .txt b { color: var(--ink); }
+  .story .count { font-family: var(--mono); font-size: .75rem; color: var(--muted); white-space: nowrap; }
+  .stepbtn { border: 1px solid var(--border); background: var(--surface-2); color: var(--ink); border-radius: 8px;
+             padding: .35rem .8rem; cursor: pointer; font-size: .9rem; }
+  .stepbtn:disabled { opacity: .4; cursor: default; }
+
+  .foot { margin-top: 1.2rem; font-size: .78rem; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { .wire, .node { transition: none; } }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">MLOps Credit Risk Platform</p>
+  <h1>Arquitetura interativa</h1>
+  <p class="lede"><strong>Clique numa peça</strong> para entendê-la, aperte um fluxo para caminhar pelas setas — e use o seletor <strong>Local / AWS</strong> para ver a mesma arquitetura com os serviços que fariam cada papel na nuvem.</p>
+
+  <div class="toolbar" id="flows">
+    <button class="flowbtn" data-flow="predict">▶ Fluxo de uma predição</button>
+    <button class="flowbtn" data-flow="startup">▶ Startup da API</button>
+    <button class="flowbtn" data-flow="train">▶ Treino &amp; promoção</button>
+    <button class="flowbtn" data-flow="monitor">▶ Monitoramento</button>
+    <button class="flowbtn" data-flow="">✕ Limpar</button>
+    <div class="modes">
+      <button class="modebtn active" data-mode="local">🐳 Local</button>
+      <button class="modebtn" data-mode="aws">☁️ AWS</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div>
+      <div class="board-scroll">
+        <div class="board" id="board">
+          <svg class="wires" id="wires" aria-hidden="true">
+            <defs>
+              <marker id="arr" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" fill="context-stroke"></path>
+              </marker>
+            </defs>
+          </svg>
+          <div class="board-inner">
+            <div class="hostcol" id="hostcol"><span class="coltag" id="hosttag">host de desenvolvimento</span></div>
+            <div class="compose" id="compose"><span class="coltag" id="composetag">docker compose — rede interna (dns: api, mlflow, postgres…)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span><span class="dot quente"></span><b>caminho quente</b> — trabalha a cada clique do usuário</span>
+        <span><span class="dot antes"></span><b>antes</b> — prepara o modelo (treino/startup)</span>
+        <span><span class="dot depois"></span><b>depois</b> — observa o que aconteceu</span>
+      </div>
+
+      <div class="story" id="story">
+        <button class="stepbtn" id="prev" aria-label="Passo anterior">←</button>
+        <div class="txt" id="storytxt"></div>
+        <span class="count" id="storycount"></span>
+        <button class="stepbtn" id="next" aria-label="Próximo passo">→</button>
+      </div>
+
+      <div class="moments">
+        <div class="moment"><b><span class="dot quente"></span>No seu clique (milissegundos)</b>
+          Só três peças trabalham: o porteiro entrega e repassa, o cérebro decide com o modelo já na memória, o cartório registra antes de responder.
+          <span class="who" id="m1who">frontend · api · postgres</span></div>
+        <div class="moment"><b><span class="dot antes"></span>Antes (para o clique ser possível)</b>
+          A fábrica treina e decide quem é o campeão; o catálogo sabe qual versão vale; o depósito guarda os bytes que a API carrega no startup.
+          <span class="who" id="m2who">dataset · pipelines · mlflow · minio</span></div>
+        <div class="moment"><b><span class="dot depois"></span>Depois (observando)</b>
+          O contador mede saúde da API; a TV desenha os gráficos; o fiscal compara quem está chegando com quem o modelo estudou (drift).
+          <span class="who" id="m3who">prometheus · grafana · evidently</span></div>
+      </div>
+    </div>
+
+    <aside class="panel" id="panel" aria-live="polite"></aside>
+  </div>
+
+  <p class="foot">Estado: roadmap completo · champion v1 (AUC 0.858) · 37 testes · CI verde · Feast descontinuado por decisão de arquitetura. No modo AWS, o mapeamento é didático (1 peça → 1 serviço); na prática combinações variam por empresa.</p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const IC = {
+    globe: c => `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 2.6 2.8 15.4 0 18M12 3c-2.8 2.6-2.8 15.4 0 18"/></svg>`,
+    angular: c => `<svg viewBox="0 0 24 24"><path d="M12 2 3 5.5l1.5 12L12 22l7.5-4.5 1.5-12z" fill="${c}"/><path d="M12 5.5 7 17h2.2l1-2.6h3.6l1 2.6H17zM11 12.6 12 9.8l1 2.8z" fill="#fff"/></svg>`,
+    bolt: c => `<svg viewBox="0 0 24 24"><path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="${c}"/></svg>`,
+    db: c => `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8"><ellipse cx="12" cy="5.5" rx="7.5" ry="3"/><path d="M4.5 5.5v13c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-13M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg>`,
+    bucket: c => `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8"><path d="M4 6h16l-2 14.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20.5z"/><ellipse cx="12" cy="6" rx="8" ry="2.4"/></svg>`,
+    flask: c => `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8"><path d="M10 3v6L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9V3"/><path d="M8.5 3h7M7.5 15h9"/></svg>`,
+    flame: c => `<svg viewBox="0 0 24 24"><path d="M12 2c1 4-4 6-4 11a4.5 4.5 0 0 0 3 4.4c-.6-1.6-.2-3 1-4.4.6 2 2.5 2.4 2.5 4.6 0 .9-.3 1.6-.8 2.2A6.5 6.5 0 0 0 18.5 13C18.5 7 13.5 5.5 12 2z" fill="${c}"/></svg>`,
+    chart: c => `<svg viewBox="0 0 24 24" fill="${c}"><rect x="4" y="12" width="3.4" height="8" rx="1"/><rect x="10.3" y="6" width="3.4" height="14" rx="1"/><rect x="16.6" y="9" width="3.4" height="11" rx="1"/></svg>`,
+    flow: c => `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7 7.5 10.5 16M17 7.5 13.5 16M7.5 6h9"/></svg>`,
+    file: c => `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8"><path d="M6 2h8l5 5v15H6z"/><path d="M14 2v5h5M9 13h7M9 17h7"/></svg>`,
+    spark: c => `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8"><path d="M3 17l5-6 4 3 6-8 3 4"/><circle cx="8" cy="11" r="1.4" fill="${c}"/><circle cx="12" cy="14" r="1.4" fill="${c}"/><circle cx="18" cy="6" r="1.4" fill="${c}"/></svg>`,
+    cloud: c => `<svg viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8"><path d="M7 18a4.5 4.5 0 1 1 .8-8.9A6 6 0 0 1 19 11a3.5 3.5 0 0 1-1 7z"/></svg>`,
+  };
+
+  const MOMENT = {
+    quente: { label: 'Caminho quente — trabalha a cada clique do usuário', cls: 'quente' },
+    antes:  { label: 'Antes — prepara o modelo (treino / startup da API)', cls: 'antes' },
+    depois: { label: 'Depois — observa o que aconteceu', cls: 'depois' },
+  };
+
+  /* cada nó tem persona local e persona AWS */
+  const NODES = [
+    { id: 'browser', moment: 'quente',
+      local: { name: 'navegador', cat: 'Usuário', icon: 'globe', color: '#67728a',
+        what: 'O ponto de partida: quem pede uma análise de crédito.',
+        role: 'Acessa a aplicação em localhost:4200. Só conversa com o nginx — nunca fala direto com API, MLflow ou banco.',
+        access: 'http://localhost:4200' },
+      aws: { name: 'navegador', cat: 'Usuário', icon: 'globe', color: '#67728a',
+        what: 'O mesmo usuário — o cliente não muda quando a infra vai para a nuvem.',
+        role: 'Acessa o domínio público servido pelo CloudFront (HTTPS).',
+        eq: 'no local: o mesmo navegador', access: 'https://credito.suaempresa.com' } },
+    { id: 'dataset', moment: 'antes',
+      local: { name: 'dataset (Kaggle)', cat: 'Dados', icon: 'file', color: '#20beff',
+        what: 'Give Me Some Credit: 150 mil clientes, 10 features, target = default em 2 anos.',
+        role: 'Vive em ml/data/raw (fora do git). Matéria-prima do treino e "reference" do Evidently.',
+        access: 'ml/data/raw/cs-training.csv' },
+      aws: { name: 'Amazon S3 · data lake', cat: 'Dados', icon: 'bucket', color: '#e88b00',
+        what: 'Object storage da AWS. Aqui: o bucket de dados brutos (camada bronze do data lake).',
+        role: 'Guarda os CSVs/Parquet que alimentam o treino. Versionamento e lifecycle nativos.',
+        eq: 'no local: a pasta ml/data/raw (+ MinIO como destino futuro do DVC)', access: 's3://credit-risk-data/raw/' } },
+    { id: 'pipelines', moment: 'antes',
+      local: { name: 'pipelines · Prefect', cat: 'Orquestração', icon: 'flow', color: '#024dfd',
+        what: 'Prefect: orquestrador Python de workflows — tasks, retries, logs, agendamento.',
+        role: 'training_flow: pandera valida → treina (SHAP + Fairlearn) → registra no MLflow → GATE: só promove a champion se o AUC superar o atual. O drift_flow roda aqui também.',
+        access: 'uv run python flows/training_flow.py' },
+      aws: { name: 'SageMaker Pipelines', cat: 'Orquestração', icon: 'flow', color: '#e88b00',
+        what: 'Pipelines gerenciados de ML da AWS (com EventBridge para agendar).',
+        role: 'O mesmo DAG: validar → treinar → avaliar → registrar → gate de aprovação. Cada step roda num job efêmero.',
+        eq: 'no local: Prefect (pipelines/flows/)', access: 'console SageMaker → Pipelines' } },
+    { id: 'frontend', moment: 'quente',
+      local: { name: 'frontend · Angular+nginx', cat: 'Apresentação', icon: 'angular', color: '#dd0031',
+        what: 'SPA Angular 22 (formulário → score) buildada e servida por nginx.',
+        role: 'O nginx serve o estático E faz proxy de /api/* para a API — mesma origem, sem CORS.',
+        access: ':4200 → 80' },
+      aws: { name: 'CloudFront + S3', cat: 'Apresentação', icon: 'cloud', color: '#e88b00',
+        what: 'CDN global (CloudFront) servindo a SPA hospedada num bucket S3.',
+        role: 'Mesmo papel do nginx: entrega o estático e roteia /api/* para o API Gateway (behaviors) — mesma origem, sem CORS.',
+        eq: 'no local: container nginx do frontend', access: 'distribuição CloudFront → bucket do build Angular' } },
+    { id: 'api', moment: 'quente',
+      local: { name: 'api · FastAPI', cat: 'Inferência', icon: 'bolt', color: '#009688',
+        what: 'API hexagonal: domínio puro no centro, adapters nas bordas. 37 testes.',
+        role: 'POST /predictions, GET /predictions/{id}/explanation, /health, /ready, /metrics. O champion fica NA MEMÓRIA: predição não toca rede além do INSERT de auditoria.',
+        access: ':8000' },
+      aws: { name: 'API Gateway + ECS Fargate', cat: 'Inferência', icon: 'bolt', color: '#e88b00',
+        what: 'API Gateway na porta de entrada; a MESMA imagem Docker da sua API rodando em containers Fargate (serverless).',
+        role: 'Nada do código muda — é a recompensa da config por env vars. O /health e /ready viram os health checks do load balancer.',
+        eq: 'no local: container api (FastAPI)', access: 'API Gateway → ALB → tasks Fargate' } },
+    { id: 'mlflow', moment: 'antes',
+      local: { name: 'mlflow', cat: 'Tracking + Registry', icon: 'flask', color: '#0194e2',
+        what: 'MLflow: rastreia experimentos e cataloga modelos com versões e aliases.',
+        role: 'Cada treino vira uma run comparável. O registry guarda credit-risk-model; o alias @champion aponta a versão que a API serve. Não guarda bytes: aponta para o MinIO.',
+        access: ':5000' },
+      aws: { name: 'SageMaker Model Registry', cat: 'Tracking + Registry', icon: 'flask', color: '#e88b00',
+        what: 'Catálogo gerenciado de modelos (+ SageMaker Experiments para o tracking).',
+        role: 'Model Package Groups com versões; o status "Approved" faz o papel do seu alias @champion. O gate do pipeline muda o status.',
+        eq: 'no local: MLflow (tracking + registry)', access: 'console SageMaker → Model Registry' } },
+    { id: 'postgres', moment: 'quente',
+      local: { name: 'postgres', cat: 'Banco relacional', icon: 'db', color: '#336791',
+        what: 'PostgreSQL 16: dados pequenos, estruturados, consultáveis.',
+        role: 'Dois bancos: "mlflow" (runs, registry — o catálogo) e "credit_risk" (tabela predictions: toda predição auditada com features JSONB, score, versão, timestamp).',
+        access: ':5432 · volume pgdata' },
+      aws: { name: 'Amazon RDS (PostgreSQL)', cat: 'Banco relacional', icon: 'db', color: '#e88b00',
+        what: 'PostgreSQL gerenciado: backup, patch, failover e réplicas por conta da AWS.',
+        role: 'Mesmo papel: a tabela predictions de auditoria. (Os metadados do registry passam a ser gerenciados pelo SageMaker.)',
+        eq: 'no local: container postgres', access: 'endpoint RDS na VPC privada' } },
+    { id: 'minio', moment: 'antes',
+      local: { name: 'minio', cat: 'Object storage', icon: 'bucket', color: '#c72e49',
+        what: 'MinIO: object storage que fala a API do S3 — buckets, chaves, blobs.',
+        role: 'Artifact store: bytes dos modelos (model.skops, MLmodel, signature) e plots SHAP. O boto3 fala com ele como se fosse a Amazon.',
+        access: ':9000 API · :9001 console · volume miniodata' },
+      aws: { name: 'Amazon S3 · artifacts', cat: 'Object storage', icon: 'bucket', color: '#e88b00',
+        what: 'O S3 de verdade — o serviço que o MinIO imita byte a byte.',
+        role: 'Bucket de artefatos de modelo. Migração: apagar a env var MLFLOW_S3_ENDPOINT_URL; o boto3 passa a falar com a Amazon. Uma linha.',
+        eq: 'no local: MinIO (bucket mlflow)', access: 's3://credit-risk-artifacts/' } },
+    { id: 'prometheus', moment: 'depois',
+      local: { name: 'prometheus', cat: 'Métricas', icon: 'flame', color: '#e6522c',
+        what: 'Banco de séries temporais que COLETA métricas (pull) dos serviços.',
+        role: 'A cada 15s raspa /metrics da API: latência por rota, throughput, status. Responde "a API está saudável?".',
+        access: ':9090 · volume promdata' },
+      aws: { name: 'CloudWatch Metrics', cat: 'Métricas', icon: 'flame', color: '#e88b00',
+        what: 'O serviço de métricas nativo da AWS (ou Amazon Managed Prometheus, se quiser manter PromQL).',
+        role: 'Coleta métricas dos containers Fargate e do API Gateway automaticamente; métricas custom da API via agente/EMF.',
+        eq: 'no local: Prometheus', access: 'console CloudWatch → Metrics' } },
+    { id: 'grafana', moment: 'depois',
+      local: { name: 'grafana', cat: 'Dashboards', icon: 'chart', color: '#f46800',
+        what: 'Visualização e alertas sobre fontes de dados (Prometheus, Postgres…).',
+        role: 'Datasource Prometheus provisionado. Próximo passo: montar o dashboard (p95, req/s, distribuição de scores).',
+        access: ':3000 (admin/admin)' },
+      aws: { name: 'CloudWatch Dashboards', cat: 'Dashboards', icon: 'chart', color: '#e88b00',
+        what: 'Dashboards e alarmes nativos (ou Amazon Managed Grafana — o mesmo Grafana, gerenciado).',
+        role: 'Mesmos painéis: p95, req/s, erros — mais alarmes que disparam SNS/Slack quando um limite estoura.',
+        eq: 'no local: Grafana', access: 'console CloudWatch → Dashboards' } },
+    { id: 'evidently', moment: 'depois',
+      local: { name: 'evidently · job', cat: 'Drift', icon: 'spark', color: '#b0413e', job: true,
+        what: 'Biblioteca de monitoramento de ML — testes estatísticos de drift feature a feature.',
+        role: 'Não é um container: é o drift_flow do Prefect. Lê as predições do Postgres (current), compara com o treino (reference) e gera o relatório HTML. Drift antecede queda de performance.',
+        access: 'pipelines/reports/drift_report.html' },
+      aws: { name: 'SageMaker Model Monitor', cat: 'Drift', icon: 'spark', color: '#e88b00', job: true,
+        what: 'Monitoramento gerenciado de modelos: jobs agendados de qualidade de dados e drift.',
+        role: 'Compara o tráfego capturado do endpoint com um baseline do treino e emite violações para o CloudWatch.',
+        eq: 'no local: drift_flow com Evidently', access: 'console SageMaker → Model Monitor' } },
+  ];
+
+  const HOST = ['browser', 'dataset', 'pipelines'];
+  const ROWS = [ ['frontend', 'api'], ['mlflow', 'postgres', 'minio'], ['prometheus', 'grafana', 'evidently'] ];
+
+  const EDGES = [
+    { id: 'e1', from: 'browser', to: 'frontend', sf: 'right', tf: 'left', lane: 0, label: 'HTTP :4200', labelAws: 'HTTPS (CloudFront)' },
+    { id: 'e2', from: 'frontend', to: 'api', sf: 'right', tf: 'left', lane: 0, label: 'proxy /api', labelAws: 'behavior /api → API Gateway' },
+    { id: 'e3', from: 'api', to: 'mlflow', sf: 'bottom', tf: 'top', lane: -14, label: 'startup: resolve @champion', labelAws: 'startup: consulta versão Approved' },
+    { id: 'e4', from: 'api', to: 'minio', sf: 'bottom', tf: 'top', lane: 14, label: 'startup: baixa os bytes', labelAws: 'startup: baixa artefato do S3' },
+    { id: 'e5', from: 'api', to: 'postgres', sf: 'bottom', tf: 'top', lane: 0, label: 'INSERT/SELECT predictions', labelAws: 'INSERT/SELECT predictions (RDS)' },
+    { id: 'e6', from: 'mlflow', to: 'postgres', sf: 'right', tf: 'left', lane: 0, label: 'backend store', labelAws: 'metadados (gerenciados pela AWS)' },
+    { id: 'e7', from: 'mlflow', to: 'minio', sf: 'bottom', tf: 'bottom', lane: 10, label: 'artifact store', labelAws: 'artefatos no S3' },
+    { id: 'e8', from: 'pipelines', to: 'mlflow', sf: 'right', tf: 'left', lane: 0, label: 'loga · registra · move alias', labelAws: 'registra versão · aprova (gate)' },
+    { id: 'e9', from: 'dataset', to: 'pipelines', sf: 'bottom', tf: 'top', lane: 0, label: 'lê CSV (pandera valida)', labelAws: 'lê do data lake (S3)' },
+    { id: 'e10', from: 'prometheus', to: 'api', sf: 'left', tf: 'left', lane: 0, label: 'scrape /metrics (15s)', labelAws: 'métricas dos containers' },
+    { id: 'e11', from: 'grafana', to: 'prometheus', sf: 'left', tf: 'right', lane: 0, label: 'PromQL', labelAws: 'consulta métricas' },
+    { id: 'e12', from: 'evidently', to: 'postgres', sf: 'top', tf: 'bottom', lane: -10, label: 'lê predictions (current)', labelAws: 'analisa tráfego capturado' },
+  ];
+
+  const FLOWS = {
+    predict: [
+      { e: 'e1', n: ['browser', 'frontend'], t: '<b>1.</b> O usuário preenche o formulário; o navegador envia o JSON ao nginx em :4200.', ta: '<b>1.</b> O usuário envia o formulário via HTTPS; o CloudFront recebe na borda mais próxima dele.' },
+      { e: 'e2', n: ['frontend', 'api'], t: '<b>2.</b> O nginx repassa /api/predictions à API (DNS interno "api"). Pydantic valida — dado inválido morre com 422.', ta: '<b>2.</b> O behavior /api roteia ao API Gateway, que repassa aos containers Fargate. A mesma validação Pydantic roda lá.' },
+      { e: null, n: ['api'], t: '<b>3.</b> ScoringService pede a probabilidade ao modelo <b>em memória</b> e aplica a faixa de risco. Nenhuma chamada de rede.', ta: '<b>3.</b> Idêntico: o container Fargate tem o modelo em memória. O código não sabe que está na AWS.' },
+      { e: 'e5', n: ['api', 'postgres'], t: '<b>4.</b> Fail-closed: a predição só é devolvida DEPOIS de auditada — INSERT na tabela predictions.', ta: '<b>4.</b> Mesmo INSERT de auditoria, agora num RDS PostgreSQL dentro da VPC privada.' },
+      { e: 'e2', n: ['frontend', 'browser'], t: '<b>5.</b> 201 de volta: probabilidade, faixa, prediction_id e a versão do modelo. Tudo em <10 ms.', ta: '<b>5.</b> 201 de volta pela mesma rota. A latência extra é só a viagem até a região da AWS.' },
+    ],
+    startup: [
+      { e: 'e3', n: ['api', 'mlflow'], t: '<b>1.</b> Ao subir, a API pergunta ao MLflow: "quem é models:/credit-risk-model@champion?"', ta: '<b>1.</b> Ao subir, a task Fargate consulta o Model Registry: "qual a versão com status Approved?"' },
+      { e: 'e6', n: ['mlflow', 'postgres'], t: '<b>2.</b> O MLflow resolve no catálogo (Postgres): alias → versão 1 → source s3://mlflow/…', ta: '<b>2.</b> O registry resolve nos metadados gerenciados: versão → localização do artefato no S3.' },
+      { e: 'e4', n: ['api', 'minio'], t: '<b>3.</b> A API baixa os bytes do MinIO e desserializa o Pipeline na memória.', ta: '<b>3.</b> O container baixa o artefato do S3 (mesmo boto3, sem endpoint_url) e desserializa na memória.' },
+      { e: null, n: ['api'], t: '<b>4.</b> /ready responde 200 e o healthcheck libera o tráfego. Registry fora? /health 200, /ready 503.', ta: '<b>4.</b> O health check do ALB passa e a task entra no target group — só então recebe tráfego.' },
+    ],
+    train: [
+      { e: 'e9', n: ['dataset', 'pipelines'], t: '<b>1.</b> training_flow lê o CSV e o <b>pandera</b> valida o contrato de qualidade.', ta: '<b>1.</b> O step de validação lê do data lake (S3) e aplica o mesmo contrato pandera.' },
+      { e: null, n: ['pipelines'], t: '<b>2.</b> Treina o Pipeline sklearn: AUC/KS, fairness por faixa etária (Fairlearn) e SHAP global.', ta: '<b>2.</b> O training job roda o mesmo código num container efêmero — mesmas métricas, fairness e SHAP.' },
+      { e: 'e8', n: ['pipelines', 'mlflow'], t: '<b>3.</b> Tudo vira uma run no MLflow + nova versão registrada.', ta: '<b>3.</b> O modelo vira uma nova versão no Model Package Group do registry.' },
+      { e: 'e7', n: ['mlflow', 'minio'], t: '<b>4.</b> Artefatos vão para o bucket; params e métricas, para o Postgres.', ta: '<b>4.</b> Artefatos no bucket S3; métricas nos Experiments.' },
+      { e: 'e8', n: ['pipelines', 'mlflow'], t: '<b>5.</b> O GATE: supera o champion? Move o alias. Não? REJEITADO (destino da v2).', ta: '<b>5.</b> O GATE: supera? status Approved (e o deploy pega a nova versão). Não? fica PendingManualApproval/Rejected.' },
+    ],
+    monitor: [
+      { e: 'e10', n: ['prometheus', 'api'], t: '<b>1.</b> O Prometheus raspa /metrics a cada 15s — latência, throughput, erros.', ta: '<b>1.</b> CloudWatch coleta métricas do Fargate/API Gateway automaticamente (+ custom via EMF).' },
+      { e: 'e11', n: ['grafana', 'prometheus'], t: '<b>2.</b> O Grafana consulta via PromQL — ex.: p95 do POST /predictions.', ta: '<b>2.</b> Dashboards e ALARMES no CloudWatch — estourou o p95? dispara SNS/Slack.' },
+      { e: 'e12', n: ['evidently', 'postgres'], t: '<b>3.</b> O drift_flow lê as predições reais (JSONB) da tabela de auditoria — o "current".', ta: '<b>3.</b> O Model Monitor analisa o tráfego capturado do endpoint (data capture).' },
+      { e: null, n: ['evidently', 'dataset'], t: '<b>4.</b> E compara com o treino ("reference"). Drift é o proxy: o rótulo real só chega em 2 anos (label lag).', ta: '<b>4.</b> E compara com o baseline gerado no treino. O label lag é o mesmo — a física do problema não muda de nuvem.' },
+    ],
+  };
+
+  /* ---------- estado ---------- */
+  let mode = 'local', selected = null, flow = null, step = 0;
+
+  /* ---------- nós ---------- */
+  const nodeEls = {};
+  function personaOf(n) { return mode === 'aws' ? n.aws : n.local; }
+  function makeNode(id) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = 'n-' + id;
+    b.addEventListener('click', () => selectNode(id));
+    nodeEls[id] = b;
+    return b;
+  }
+  function paintNodes() {
+    NODES.forEach(n => {
+      const p = personaOf(n);
+      const el = nodeEls[n.id];
+      el.className = 'node' + (p.job ? ' job' : '');
+      el.innerHTML = `<span class="ic" style="background:${p.color}1a">${IC[p.icon](p.color)}</span>
+        <span><b><span class="dot ${MOMENT[n.moment].cls}"></span>${p.name}</b><small>${p.cat}</small></span>`;
+    });
+    document.getElementById('hosttag').textContent = mode === 'aws' ? 'fora da nuvem (internet)' : 'host de desenvolvimento';
+    document.getElementById('composetag').textContent = mode === 'aws'
+      ? 'aws — sua conta / vpc privada' : 'docker compose — rede interna (dns: api, mlflow, postgres…)';
+  }
+  const hostcol = document.getElementById('hostcol');
+  HOST.forEach(id => hostcol.appendChild(makeNode(id)));
+  const compose = document.getElementById('compose');
+  ROWS.forEach(ids => {
+    const row = document.createElement('div');
+    row.className = 'row ' + (ids.length === 2 ? 'r1' : 'r3');
+    ids.forEach(id => row.appendChild(makeNode(id)));
+    compose.appendChild(row);
+  });
+
+  /* ---------- roteamento ortogonal (âncoras distribuídas + faixas) ---------- */
+  const board = document.getElementById('board');
+  const svg = document.getElementById('wires');
+  const wireEls = {};
+
+  function rect(id) {
+    const b = board.getBoundingClientRect();
+    const r = nodeEls[id].getBoundingClientRect();
+    return { x1: r.left - b.left, y1: r.top - b.top, x2: r.right - b.left, y2: r.bottom - b.top,
+             cx: r.left - b.left + r.width / 2, cy: r.top - b.top + r.height / 2 };
+  }
+  function anchors() {
+    const use = {};
+    EDGES.forEach(e => {
+      const s = rect(e.from), t = rect(e.to);
+      (use[e.from + ':' + e.sf] = use[e.from + ':' + e.sf] || []).push({ e: e.id, k: t.cx + t.cy });
+      (use[e.to + ':' + e.tf] = use[e.to + ':' + e.tf] || []).push({ e: e.id, k: s.cx + s.cy });
+    });
+    const pos = {};
+    Object.entries(use).forEach(([key, list]) => {
+      list.sort((a, b) => a.k - b.k);
+      const [nodeId, side] = key.split(':');
+      const r = rect(nodeId);
+      list.forEach((item, i) => {
+        const f = (i + 1) / (list.length + 1);
+        let x, y;
+        if (side === 'top') { x = r.x1 + (r.x2 - r.x1) * f; y = r.y1; }
+        else if (side === 'bottom') { x = r.x1 + (r.x2 - r.x1) * f; y = r.y2; }
+        else if (side === 'left') { x = r.x1; y = r.y1 + (r.y2 - r.y1) * f; }
+        else { x = r.x2; y = r.y1 + (r.y2 - r.y1) * f; }
+        const edge = EDGES.find(e => e.id === item.e);
+        pos[item.e] = pos[item.e] || {};
+        if (nodeId === edge.from) { pos[item.e].sx = x; pos[item.e].sy = y; }
+        else { pos[item.e].tx = x; pos[item.e].ty = y; }
+      });
+    });
+    return pos;
+  }
+  function pathFor(e, p) {
+    const { sx, sy, tx, ty } = p;
+    const L = e.lane || 0;
+    let d, lx, ly;
+    if (e.sf === 'bottom' && e.tf === 'top') {
+      const c = (sy + ty) / 2 + L;
+      d = `M${sx},${sy} L${sx},${c} L${tx},${c} L${tx},${ty}`; lx = (sx + tx) / 2; ly = c - 6;
+    } else if ((e.sf === 'right' && e.tf === 'left') || (e.sf === 'left' && e.tf === 'right')) {
+      const c = (sx + tx) / 2 + L;
+      d = `M${sx},${sy} L${c},${sy} L${c},${ty} L${tx},${ty}`; lx = (sx + tx) / 2; ly = Math.min(sy, ty) - 8;
+      if (Math.abs(sy - ty) > 8) { lx = c; ly = (sy + ty) / 2 - 6; }
+    } else if (e.sf === 'bottom' && e.tf === 'bottom') {
+      const c = Math.max(sy, ty) + 22 + L;
+      d = `M${sx},${sy} L${sx},${c} L${tx},${c} L${tx},${ty}`; lx = (sx + tx) / 2; ly = c - 6;
+    } else if (e.sf === 'top' && e.tf === 'bottom') {
+      const c = (sy + ty) / 2 + L;
+      d = `M${sx},${sy} L${sx},${c} L${tx},${c} L${tx},${ty}`; lx = (sx + tx) / 2; ly = c - 6;
+    } else if (e.sf === 'left' && e.tf === 'left') {
+      const c = Math.min(sx, tx) - 26 + L;
+      d = `M${sx},${sy} L${c},${sy} L${c},${ty} L${tx},${ty}`; lx = c + 10; ly = (sy + ty) / 2;
+    }
+    return { d, lx, ly };
+  }
+  function draw() {
+    svg.querySelectorAll('.wire, .wire-label').forEach(x => x.remove());
+    svg.setAttribute('viewBox', `0 0 ${board.scrollWidth} ${board.scrollHeight}`);
+    svg.setAttribute('width', board.scrollWidth); svg.setAttribute('height', board.scrollHeight);
+    const pos = anchors();
+    EDGES.forEach(e => {
+      const { d, lx, ly } = pathFor(e, pos[e.id]);
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', d); p.setAttribute('class', 'wire'); p.setAttribute('marker-end', 'url(#arr)');
+      svg.appendChild(p);
+      const tx = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      tx.setAttribute('x', lx); tx.setAttribute('y', ly); tx.setAttribute('text-anchor', 'middle');
+      tx.setAttribute('class', 'wire-label');
+      tx.textContent = mode === 'aws' ? e.labelAws : e.label;
+      svg.appendChild(tx);
+      wireEls[e.id] = { p, tx };
+    });
+    applyState();
+  }
+
+  /* ---------- painel / estado ---------- */
+  const panel = document.getElementById('panel');
+  const story = document.getElementById('story');
+  const storytxt = document.getElementById('storytxt');
+  const storycount = document.getElementById('storycount');
+
+  function applyState() {
+    const activeEdges = new Set(), activeNodes = new Set();
+    let dimming = false;
+    if (flow) {
+      dimming = true;
+      const st = FLOWS[flow][step];
+      if (st.e) activeEdges.add(st.e);
+      st.n.forEach(n => activeNodes.add(n));
+    } else if (selected) {
+      dimming = true;
+      activeNodes.add(selected);
+      EDGES.forEach(e => {
+        if (e.from === selected || e.to === selected) {
+          activeEdges.add(e.id); activeNodes.add(e.from); activeNodes.add(e.to);
+        }
+      });
+    }
+    Object.entries(wireEls).forEach(([id, w]) => {
+      w.p.classList.toggle('on', activeEdges.has(id));
+      w.tx.classList.toggle('on', activeEdges.has(id));
+      w.p.classList.toggle('dim', dimming && !activeEdges.has(id));
+    });
+    Object.entries(nodeEls).forEach(([id, el]) => {
+      el.classList.toggle('on', flow !== null && activeNodes.has(id));
+      el.classList.toggle('sel', selected === id && !flow);
+      el.classList.toggle('dim', dimming && !activeNodes.has(id));
+    });
+  }
+
+  function resetPanel() {
+    panel.innerHTML = `<h3>👋 Explore a plataforma</h3>
+      <p class="hint">Clique numa peça para ver o que é, quando ela trabalha e ${mode === 'aws' ? 'quem faz esse papel no seu ambiente local' : 'qual serviço AWS faria o papel dela'}.</p>
+      <p class="hint">O pontinho colorido de cada peça diz o momento em que ela trabalha (veja a legenda abaixo do quadro).</p>`;
+  }
+
+  function renderPanel() {
+    if (!selected) { resetPanel(); return; }
+    const n = NODES.find(x => x.id === selected);
+    const p = personaOf(n);
+    const conns = EDGES.filter(e => e.from === n.id || e.to === n.id)
+      .map(e => {
+        const other = e.from === n.id ? e.to : e.from;
+        const otherName = personaOf(NODES.find(x => x.id === other)).name;
+        const lbl = mode === 'aws' ? e.labelAws : e.label;
+        return (e.from === n.id ? '→ ' : '← ') + otherName + ': ' + lbl;
+      });
+    const eqRow = mode === 'aws'
+      ? `<div><dt>Quem faz isso no seu local</dt><dd>${p.eq}</dd></div>`
+      : `<div><dt>Na AWS seria</dt><dd>${personaOf({ aws: n.aws, local: n.aws }).name} — ${n.aws.what}</dd></div>`;
+    panel.innerHTML = `
+      <h3><span style="width:26px;height:26px;border-radius:7px;display:inline-grid;place-items:center;background:${p.color}1a">${IC[p.icon](p.color)}</span> ${p.name}</h3>
+      <div class="cat">${p.cat}</div>
+      <dl>
+        <div><dt>Quando trabalha</dt><dd><span class="dot ${MOMENT[n.moment].cls}"></span>${MOMENT[n.moment].label}</dd></div>
+        <div><dt>O que é</dt><dd>${p.what}</dd></div>
+        <div><dt>Papel neste projeto</dt><dd>${p.role}</dd></div>
+        ${eqRow}
+        <div><dt>Acesso</dt><dd style="font-family:var(--mono);font-size:.78rem">${p.access}</dd></div>
+      </dl>
+      <div class="conns">${conns.map(c => `<span>${c}</span>`).join('')}</div>`;
+  }
+
+  function selectNode(id) {
+    flow = null; document.querySelectorAll('.flowbtn').forEach(b => b.classList.remove('active'));
+    story.classList.remove('show');
+    selected = (selected === id) ? null : id;
+    renderPanel();
+    applyState();
+  }
+
+  function renderStep() {
+    const st = FLOWS[flow][step];
+    storytxt.innerHTML = mode === 'aws' ? st.ta : st.t;
+    storycount.textContent = (step + 1) + ' / ' + FLOWS[flow].length;
+    document.getElementById('prev').disabled = step === 0;
+    document.getElementById('next').disabled = step === FLOWS[flow].length - 1;
+    applyState();
+  }
+
+  document.getElementById('flows').addEventListener('click', ev => {
+    const mb = ev.target.closest('.modebtn');
+    if (mb) {
+      mode = mb.dataset.mode;
+      document.querySelectorAll('.modebtn').forEach(b => b.classList.toggle('active', b === mb));
+      document.body.classList.toggle('aws', mode === 'aws');
+      paintNodes(); draw(); renderPanel();
+      if (flow) renderStep();
+      return;
+    }
+    const btn = ev.target.closest('.flowbtn'); if (!btn) return;
+    document.querySelectorAll('.flowbtn').forEach(b => b.classList.remove('active'));
+    selected = null; resetPanel();
+    if (!btn.dataset.flow) { flow = null; story.classList.remove('show'); applyState(); return; }
+    btn.classList.add('active');
+    flow = btn.dataset.flow; step = 0;
+    story.classList.add('show');
+    renderStep();
+  });
+  document.getElementById('prev').addEventListener('click', () => { if (step > 0) { step--; renderStep(); } });
+  document.getElementById('next').addEventListener('click', () => { if (flow && step < FLOWS[flow].length - 1) { step++; renderStep(); } });
+
+  paintNodes();
+  resetPanel();
+  new ResizeObserver(() => draw()).observe(board);
+  window.addEventListener('resize', draw);
+  draw();
+})();
+</script>
+
+</body>
+</html>

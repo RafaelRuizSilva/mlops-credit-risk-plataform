@@ -1,6 +1,8 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, delay, of } from 'rxjs';
+
+import { isDemoMode, scoreLocally } from './demo-model';
 
 // Espelha o PredictionRequest da API (snake_case preservado de propósito:
 // o contrato é da API, o front se adapta a ele)
@@ -28,8 +30,16 @@ export interface PredictionResponse {
 export class PredictionService {
   private readonly http = inject(HttpClient);
 
-  // caminho relativo: em dev o proxy.conf redireciona; em prod o nginx faz proxy
   score(request: PredictionRequest): Observable<PredictionResponse> {
+    // GitHub Pages não tem backend: o score roda no navegador (demo-model.ts)
+    if (this.demo) {
+      return of(scoreLocally(request)).pipe(delay(350));
+    }
+    // caminho relativo: em dev o proxy.conf redireciona; em prod o nginx faz proxy
     return this.http.post<PredictionResponse>('/api/predictions', request);
+  }
+
+  get demo(): boolean {
+    return isDemoMode();
   }
 }

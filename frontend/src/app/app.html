@@ -2,6 +2,13 @@
   <header class="header">
     <h1>Análise de Risco de Crédito</h1>
     <p class="subtitle">Preencha o perfil do solicitante para estimar a probabilidade de inadimplência nos próximos 2 anos.</p>
+    <nav class="links">
+      <a href="arquitetura.html">🏗️ desenho de arquitetura</a>
+      <a href="https://github.com/RafaelRuizSilva/mlops-credit-risk-plataform" target="_blank" rel="noopener">⌨️ código no GitHub</a>
+    </nav>
+    @if (demo) {
+      <p class="demo-banner">🧪 <strong>Modo demonstração:</strong> o score é calculado aqui no navegador com os coeficientes reais do modelo baseline (regressão logística v1, AUC 0.858) exportados do MLflow. A plataforma completa — LightGBM promovido por gate, auditoria em PostgreSQL, Prometheus/Grafana, Evidently — roda via Docker Compose (veja o repositório).</p>
+    }
   </header>
 
   @if (!result()) {
