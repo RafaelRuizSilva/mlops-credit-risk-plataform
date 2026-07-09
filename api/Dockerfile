@@ -13,6 +13,8 @@ RUN uv sync --frozen --no-dev
 
 # --- estágio 2: imagem final enxuta, sem uv e sem toolchain --------------
 FROM python:3.11-slim-bookworm
+# runtime OpenMP exigido pelo LightGBM (ausente na slim)
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src ./src

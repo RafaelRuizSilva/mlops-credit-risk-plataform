@@ -27,14 +27,33 @@ TARGET = "SeriousDlqin2yrs"
 @dataclass(frozen=True)
 class TrainConfig:
     """Tudo que é ajustável no treino, num lugar só."""
+    model: str = "logistic"  # "logistic" | "lightgbm"
     test_size: float = 0.2
     n_splits: int = 5
     C: float = 1.0  # regularização da LogisticRegression
+    n_estimators: int = 400       # lightgbm
+    learning_rate: float = 0.05   # lightgbm
+    num_leaves: int = 31          # lightgbm
     random_state: int = 42
 
 
 def build_pipeline(config: TrainConfig) -> Pipeline:
     """Pré-processamento + modelo. O objeto inteiro será serializado no MLflow."""
+    if config.model == "lightgbm":
+        from lightgbm import LGBMClassifier
+
+        # Árvores tratam NaN nativamente e ignoram escala: sem imputer, sem scaler.
+        # O NaN "cru" preserva o sinal de 'não declarou' melhor que a mediana.
+        return Pipeline([
+            ('model', LGBMClassifier(
+                n_estimators=config.n_estimators,
+                learning_rate=config.learning_rate,
+                num_leaves=config.num_leaves,
+                class_weight='balanced',
+                random_state=config.random_state,
+                verbose=-1,
+            )),
+        ])
     return Pipeline([
         # atinge MonthlyIncome e NumberOfDependents; no-op nas colunas sem NaN
         ('imputer', SimpleImputer(strategy='median')),
@@ -134,14 +153,19 @@ def run_experiment(
             plot = shap_summary_plot(result.pipe, result.X_train, Path(tmp) / "shap_summary.png")
             mlflow.log_artifact(str(plot), artifact_path="explainability")
 
+        # skops (auditoria de tipos) só cobre estimadores sklearn puros;
+        # LGBMClassifier exige cloudpickle
+        serialization = (
+            {"serialization_format": "cloudpickle"}
+            if config.model == "lightgbm"
+            else {"skops_trusted_types": ["numpy.dtype"]}
+        )
         model_info = mlflow.sklearn.log_model(
-            result.pipe,                        # o Pipeline INTEIRO, com imputer e scaler
+            result.pipe,                        # o Pipeline INTEIRO
             name="model",
             input_example=result.X_train.head(5),
-            # mlflow 3.x serializa com skops, que audita tipos por segurança;
-            # numpy.dtype é usado internamente pelo StandardScaler e é seguro
-            skops_trusted_types=["numpy.dtype"],
             registered_model_name="credit-risk-model" if register else None,
+            **serialization,
         )
         return {
             "run_id": run.info.run_id,

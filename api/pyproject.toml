@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "boto3>=1.43.40",
     "fastapi>=0.139.0",
+    "lightgbm>=4.6.0",
     "mlflow>=3.14,<4",
     "pandas>=2.3.3",
     "prometheus-fastapi-instrumentator>=8.0.2",

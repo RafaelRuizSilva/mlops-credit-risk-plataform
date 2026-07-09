@@ -69,24 +69,32 @@ class MLflowModelProvider:
         return self._version
 
     def explain(self, application: CreditApplication) -> tuple[FeatureContribution, ...]:
-        """Contribuições em log-odds: coeficiente x feature escalada.
+        """Contribuições em log-odds por feature, qualquer que seja o champion.
 
-        Como o scaler centra na média do treino, cada termo é o desvio do
-        solicitante em relação ao solicitante médio — para modelo linear,
-        exatamente os SHAP values com baseline na média.
+        - Modelo linear: coeficiente x feature escalada (== SHAP com baseline
+          na média do treino, pois o scaler centra em zero).
+        - LightGBM: TreeSHAP nativo (pred_contrib=True), mesmo espaço de log-odds.
         """
         frame = _to_feature_frame(application)
-        transformed = self._pipeline[:-1].transform(frame)[0]
-        coefficients = self._pipeline[-1].coef_[0]
+        model = self._pipeline[-1]
+
+        if hasattr(model, "coef_"):
+            transformed = self._pipeline[:-1].transform(frame)[0]
+            values = transformed * model.coef_[0]
+        elif hasattr(model, "booster_"):
+            # última coluna do pred_contrib é o valor-base; descarta
+            values = model.booster_.predict(frame, pred_contrib=True)[0][:-1]
+        else:
+            raise ModelUnavailableError(
+                f"champion sem estratégia de explicação: {type(model).__name__}"
+            )
 
         contributions = [
             FeatureContribution(
                 feature=_TRAIN_TO_API.get(name, name),
                 value=None if pd.isna(raw) else float(raw),
-                contribution=float(scaled * coef),
+                contribution=float(contrib),
             )
-            for name, raw, scaled, coef in zip(
-                frame.columns, frame.iloc[0], transformed, coefficients
-            )
+            for name, raw, contrib in zip(frame.columns, frame.iloc[0], values)
         ]
         return tuple(sorted(contributions, key=lambda c: abs(c.contribution), reverse=True))

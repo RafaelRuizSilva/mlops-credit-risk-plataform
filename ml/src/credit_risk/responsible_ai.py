@@ -18,11 +18,17 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 
 def shap_summary_plot(pipe: Pipeline, X: pd.DataFrame, out_path: Path, sample: int = 500) -> Path:
-    """SHAP global do modelo linear sobre as features JÁ transformadas."""
+    """SHAP global: LinearExplainer para modelos lineares, TreeExplainer para árvores."""
     Xs = X.sample(n=min(sample, len(X)), random_state=42)
-    X_trans = pipe[:-1].transform(Xs)
-    explainer = shap.LinearExplainer(pipe[-1], X_trans)
-    values = explainer(X_trans)
+    model = pipe[-1]
+    X_input = pipe[:-1].transform(Xs) if len(pipe.steps) > 1 else Xs
+    if hasattr(model, "coef_"):
+        explainer = shap.LinearExplainer(model, X_input)
+    else:
+        explainer = shap.TreeExplainer(model)
+    values = explainer(X_input)
+    if values.values.ndim == 3:      # binário em árvores: pega a classe positiva
+        values = values[:, :, 1]
     values.feature_names = list(Xs.columns)
 
     plt.figure()

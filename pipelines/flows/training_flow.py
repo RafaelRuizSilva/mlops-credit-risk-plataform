@@ -75,7 +75,13 @@ def training_pipeline(config: TrainConfig = TrainConfig()) -> str:
 
 
 if __name__ == "__main__":
+    import argparse
+
     sys.stdout.reconfigure(encoding="utf-8")
     logging.basicConfig(level=logging.INFO)
     load_dotenv()
-    print(training_pipeline())
+
+    parser = argparse.ArgumentParser(description="Pipeline de treino com gate de promoção")
+    parser.add_argument("--model", choices=["logistic", "lightgbm"], default="logistic")
+    args = parser.parse_args()
+    print(training_pipeline(TrainConfig(model=args.model)))

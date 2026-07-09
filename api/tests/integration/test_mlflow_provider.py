@@ -31,7 +31,11 @@ def provider() -> MLflowModelProvider:
 class TestMLflowModelProvider:
 
     def test_carrega_o_champion_e_expoe_versao(self, provider):
-        assert provider.model_version() == "1"
+        # o champion muda conforme o gate promove; o contrato é expor A versão dele
+        from mlflow import MlflowClient
+
+        esperado = MlflowClient().get_model_version_by_alias("credit-risk-model", "champion").version
+        assert provider.model_version() == esperado
 
     def test_probabilidade_e_um_float_valido(self, provider):
         proba = provider.predict_probability(_application())
