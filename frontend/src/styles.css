@@ -1,0 +1,48 @@
+/* tokens de tema (claro/escuro via prefers-color-scheme) */
+:root {
+  --surface-page: #f6f7f9;
+  --surface: #ffffff;
+  --surface-input: #ffffff;
+  --border: #d8dce2;
+  --ink: #1c2330;
+  --ink-secondary: #3d4656;
+  --ink-muted: #6b7484;
+  --accent: #2a78d6;
+  --good: #1a7f37;
+  --good-bg: #e3f4e8;
+  --warning: #9a6700;
+  --warning-bg: #fbf0d9;
+  --serious: #c03535;
+  --serious-bg: #fbe5e5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-page: #14181f;
+    --surface: #1d232d;
+    --surface-input: #161b23;
+    --border: #39414e;
+    --ink: #e8ebf0;
+    --ink-secondary: #c3c9d4;
+    --ink-muted: #8b93a3;
+    --accent: #3987e5;
+    --good: #4ecb71;
+    --good-bg: #16301e;
+    --warning: #e3b341;
+    --warning-bg: #322a12;
+    --serious: #ef6a6a;
+    --serious-bg: #391b1b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.45;
+}

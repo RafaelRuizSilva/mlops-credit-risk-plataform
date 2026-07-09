@@ -1,0 +1,96 @@
+<main class="page">
+  <header class="header">
+    <h1>Análise de Risco de Crédito</h1>
+    <p class="subtitle">Preencha o perfil do solicitante para estimar a probabilidade de inadimplência nos próximos 2 anos.</p>
+  </header>
+
+  @if (!result()) {
+    <form class="card" [formGroup]="form" (ngSubmit)="submit()">
+      <div class="grid">
+        <label class="field">
+          <span>Idade</span>
+          <input type="number" formControlName="age" min="18" max="120" />
+          @if (form.controls.age.touched && form.controls.age.invalid) {
+            <small class="hint-error">Idade entre 18 e 120</small>
+          }
+        </label>
+
+        <label class="field">
+          <span>Renda mensal (R$) <em class="optional">opcional</em></span>
+          <input type="number" formControlName="monthly_income" min="0" placeholder="não declarada" />
+        </label>
+
+        <label class="field">
+          <span>Dependentes <em class="optional">opcional</em></span>
+          <input type="number" formControlName="n_dependents" min="0" placeholder="não declarado" />
+        </label>
+
+        <label class="field">
+          <span>Uso do limite de crédito (0–1)</span>
+          <input type="number" formControlName="revolving_utilization" min="0" step="0.01" />
+        </label>
+
+        <label class="field">
+          <span>Comprometimento da renda (0–1)</span>
+          <input type="number" formControlName="debt_ratio" min="0" step="0.01" />
+        </label>
+
+        <label class="field">
+          <span>Linhas de crédito abertas</span>
+          <input type="number" formControlName="n_open_credit_lines" min="0" />
+        </label>
+
+        <label class="field">
+          <span>Empréstimos imobiliários</span>
+          <input type="number" formControlName="n_real_estate_loans" min="0" />
+        </label>
+
+        <label class="field">
+          <span>Atrasos de 30–59 dias (últimos 2 anos)</span>
+          <input type="number" formControlName="n_late_30_59" min="0" />
+        </label>
+
+        <label class="field">
+          <span>Atrasos de 60–89 dias</span>
+          <input type="number" formControlName="n_late_60_89" min="0" />
+        </label>
+
+        <label class="field">
+          <span>Atrasos de 90+ dias</span>
+          <input type="number" formControlName="n_late_90" min="0" />
+        </label>
+      </div>
+
+      @if (error()) {
+        <p class="alert" role="alert">⚠️ {{ error() }}</p>
+      }
+
+      <button class="btn-primary" type="submit" [disabled]="loading()">
+        {{ loading() ? 'Avaliando…' : 'Avaliar risco' }}
+      </button>
+    </form>
+  } @else {
+    <section class="card result" [class]="'band-' + result()!.risk_band">
+      <p class="result-label">Probabilidade de inadimplência</p>
+      <p class="result-probability">{{ result()!.probability_default | percent: '1.1-1' }}</p>
+      <p class="result-band">{{ bandLabel[result()!.risk_band] }}</p>
+
+      <dl class="result-meta">
+        <div>
+          <dt>ID da avaliação</dt>
+          <dd><code>{{ result()!.prediction_id }}</code></dd>
+        </div>
+        <div>
+          <dt>Versão do modelo</dt>
+          <dd>{{ result()!.model_version }}</dd>
+        </div>
+      </dl>
+
+      <button class="btn-secondary" type="button" (click)="reset()">Nova avaliação</button>
+    </section>
+  }
+
+  <footer class="footer">
+    <p>Projeto de estudo MLOps — modelo servido via MLflow Registry, predições auditadas em PostgreSQL.</p>
+  </footer>
+</main>
