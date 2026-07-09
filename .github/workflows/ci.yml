@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uvx ruff check api/src api/tests ml/src pipelines/flows
+
+  api-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Testes unitários (integração é pulada sem infra)
+        working-directory: api
+        run: |
+          uv sync --frozen
+          uv run pytest tests/unit -q
+
+  ml-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Smoke de import (dataset não vive no repo)
+        working-directory: ml
+        run: |
+          uv sync --frozen
+          uv run python -c "from credit_risk.train import build_pipeline, TrainConfig; from credit_risk.validation import schema; build_pipeline(TrainConfig()); print('ok')"
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: |
+          npm ci
+          npx ng build --configuration production
+
+  docker-images:
+    runs-on: ubuntu-latest
+    needs: [api-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build da imagem da API (sem push)
+        run: docker build api
+      - name: Build da imagem do frontend (sem push)
+        run: docker build frontend

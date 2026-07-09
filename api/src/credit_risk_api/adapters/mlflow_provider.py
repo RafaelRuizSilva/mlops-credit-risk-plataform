@@ -10,7 +10,22 @@ import pandas as pd
 from mlflow import MlflowClient
 
 from credit_risk_api.domain.exceptions import ModelUnavailableError
-from credit_risk_api.domain.models import CreditApplication
+from credit_risk_api.domain.models import CreditApplication, FeatureContribution
+
+# nomes do treino -> nomes do contrato da API (para a explicação ser legível)
+_TRAIN_TO_API = {
+    "RevolvingUtilizationOfUnsecuredLines": "revolving_utilization",
+    "age": "age",
+    "NumberOfTime30-59DaysPastDueNotWorse": "n_late_30_59",
+    "DebtRatio": "debt_ratio",
+    "MonthlyIncome": "monthly_income",
+    "NumberOfOpenCreditLinesAndLoans": "n_open_credit_lines",
+    "NumberOfTimes90DaysLate": "n_late_90",
+    "NumberRealEstateLoansOrLines": "n_real_estate_loans",
+    "NumberOfTime60-89DaysPastDueNotWorse": "n_late_60_89",
+    "NumberOfDependents": "n_dependents",
+    "declarou_renda": "declarou_renda",
+}
 
 
 def _to_feature_frame(app: CreditApplication) -> pd.DataFrame:
@@ -52,3 +67,26 @@ class MLflowModelProvider:
 
     def model_version(self) -> str:
         return self._version
+
+    def explain(self, application: CreditApplication) -> tuple[FeatureContribution, ...]:
+        """Contribuições em log-odds: coeficiente x feature escalada.
+
+        Como o scaler centra na média do treino, cada termo é o desvio do
+        solicitante em relação ao solicitante médio — para modelo linear,
+        exatamente os SHAP values com baseline na média.
+        """
+        frame = _to_feature_frame(application)
+        transformed = self._pipeline[:-1].transform(frame)[0]
+        coefficients = self._pipeline[-1].coef_[0]
+
+        contributions = [
+            FeatureContribution(
+                feature=_TRAIN_TO_API.get(name, name),
+                value=None if pd.isna(raw) else float(raw),
+                contribution=float(scaled * coef),
+            )
+            for name, raw, scaled, coef in zip(
+                frame.columns, frame.iloc[0], transformed, coefficients
+            )
+        ]
+        return tuple(sorted(contributions, key=lambda c: abs(c.contribution), reverse=True))

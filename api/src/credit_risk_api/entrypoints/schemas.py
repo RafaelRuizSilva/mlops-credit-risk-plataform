@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from credit_risk_api.domain.models import CreditApplication, RiskScore
+from credit_risk_api.domain.models import CreditApplication, Explanation, RiskScore
 
 
 class PredictionRequest(BaseModel):
@@ -39,4 +39,35 @@ class PredictionResponse(BaseModel):
             probability_default=score.probability_default,
             risk_band=score.risk_band.value,
             model_version=score.model_version,
+        )
+
+
+class ContributionItem(BaseModel):
+    feature: str
+    value: float | None
+    contribution_log_odds: float
+    direction: str  # "aumenta" | "reduz" o risco
+
+
+class ExplanationResponse(BaseModel):
+    prediction_id: UUID
+    model_version: str
+    baseline: str
+    contributions: list[ContributionItem]
+
+    @classmethod
+    def from_domain(cls, explanation: Explanation) -> "ExplanationResponse":
+        return cls(
+            prediction_id=explanation.prediction_id,
+            model_version=explanation.model_version,
+            baseline="solicitante médio do conjunto de treino (log-odds)",
+            contributions=[
+                ContributionItem(
+                    feature=c.feature,
+                    value=c.value,
+                    contribution_log_odds=round(c.contribution, 4),
+                    direction="aumenta" if c.contribution > 0 else "reduz",
+                )
+                for c in explanation.contributions
+            ],
         )

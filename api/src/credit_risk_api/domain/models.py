@@ -41,6 +41,25 @@ class CreditApplication:
 
 
 @dataclass(frozen=True)
+class FeatureContribution:
+    """Contribuição de uma feature para o score, em log-odds.
+
+    Baseline = solicitante médio do treino; positivo empurra para o default.
+    Para modelo linear isso equivale aos SHAP values com baseline na média.
+    """
+    feature: str
+    value: float | None
+    contribution: float
+
+
+@dataclass(frozen=True)
+class Explanation:
+    prediction_id: UUID
+    model_version: str
+    contributions: tuple[FeatureContribution, ...]
+
+
+@dataclass(frozen=True)
 class RiskScore:
     """Resultado de uma avaliação de risco."""
     prediction_id: UUID

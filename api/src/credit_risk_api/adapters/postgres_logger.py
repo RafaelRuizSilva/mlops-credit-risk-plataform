@@ -6,6 +6,7 @@ a mudanças de schema do modelo sem migração de coluna.
 """
 import json
 from dataclasses import asdict
+from uuid import UUID
 
 import psycopg
 from psycopg_pool import ConnectionPool
@@ -55,6 +56,17 @@ class PostgresPredictionLogger:
                 )
         except psycopg.Error as exc:
             raise PredictionLogError(f"falha ao registrar predição: {exc}") from exc
+
+    def get(self, prediction_id: UUID) -> CreditApplication | None:
+        """Implementa também a port PredictionStore (mesma tabela, leitura)."""
+        try:
+            with self._pool.connection() as conn:
+                row = conn.execute(
+                    "SELECT features FROM predictions WHERE id = %s", [prediction_id]
+                ).fetchone()
+        except psycopg.Error as exc:
+            raise PredictionLogError(f"falha ao consultar predição: {exc}") from exc
+        return CreditApplication(**row[0]) if row else None
 
     def close(self) -> None:
         self._pool.close()

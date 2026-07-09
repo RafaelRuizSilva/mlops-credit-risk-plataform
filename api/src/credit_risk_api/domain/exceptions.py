@@ -16,3 +16,7 @@ class ModelUnavailableError(DomainError):
 
 class PredictionLogError(DomainError):
     """A predição não pôde ser registrada para auditoria."""
+
+
+class PredictionNotFoundError(DomainError):
+    """Não existe predição registrada com o id informado."""

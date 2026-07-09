@@ -5,8 +5,9 @@ COMO entregar. Protocol = duck typing verificável: qualquer classe com esses
 métodos satisfaz a port, sem herdar de nada.
 """
 from typing import Protocol
+from uuid import UUID
 
-from credit_risk_api.domain.models import CreditApplication, RiskScore
+from credit_risk_api.domain.models import CreditApplication, FeatureContribution, RiskScore
 
 
 class ModelProvider(Protocol):
@@ -19,6 +20,16 @@ class ModelProvider(Protocol):
 
     def model_version(self) -> str:
         """Identifica o modelo que responde (rastreabilidade/auditoria)."""
+        ...
+
+    def explain(self, application: CreditApplication) -> tuple[FeatureContribution, ...]:
+        """Contribuição de cada feature para o score, da maior para a menor (|contrib|)."""
+        ...
+
+
+class PredictionStore(Protocol):
+    def get(self, prediction_id: UUID) -> CreditApplication | None:
+        """Recupera as features de uma predição registrada (None se não existir)."""
         ...
 
 
