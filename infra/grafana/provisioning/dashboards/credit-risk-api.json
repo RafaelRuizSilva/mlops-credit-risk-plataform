@@ -1,0 +1,81 @@
+{
+  "uid": "credit-risk-api",
+  "title": "Credit Risk API",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Requisições por segundo (por rota)",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (handler) (rate(http_requests_total{handler!=\"none\"}[5m]))",
+          "legendFormat": "{{handler}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Latência p95 por rota",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, handler) (rate(http_request_duration_seconds_bucket{handler!=\"none\"}[5m])))",
+          "legendFormat": "p95 {{handler}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Predições servidas (2xx, desde o último restart)",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(http_requests_total{handler=\"/predictions\", status=\"2xx\"}) or vector(0)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Erros 5xx (última hora)",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(http_requests_total{status=~\"5..\"}[1h])) or vector(0)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "API no ar (up)",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [ { "type": "value", "options": { "1": { "text": "UP", "color": "green" }, "0": { "text": "DOWN", "color": "red" } } } ]
+        },
+        "overrides": []
+      },
+      "targets": [ { "expr": "up{job=\"credit-risk-api\"}", "refId": "A" } ]
+    }
+  ]
+}
