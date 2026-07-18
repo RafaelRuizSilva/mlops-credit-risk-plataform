@@ -139,6 +139,28 @@
 
   .foot { margin-top: 1.2rem; font-size: .78rem; color: var(--muted); }
   @media (prefers-reduced-motion: reduce) { .wire, .node { transition: none; } }
+
+  /* ---------- mobile ---------- */
+  @media (max-width: 640px) {
+    body { padding: 1.1rem .7rem 2.5rem; }
+    h1 { font-size: 1.35rem; }
+    .lede { font-size: .9rem; }
+    .toolbar { gap: .4rem; }
+    .flowbtn, .modebtn { padding: .35rem .75rem; font-size: .78rem; }
+    .modes { margin-left: 0; }          /* seletor Local/AWS quebra p/ linha própria */
+    .panel { position: static; }        /* painel deixa de ser sticky e flui abaixo */
+    .story { flex-wrap: wrap; }
+    .story .txt { flex: 1 1 100%; order: -1; }
+    .moments { grid-template-columns: 1fr; }
+    .board { padding: 1rem; }
+    /* o diagrama mantém largura mínima e rola na horizontal — com dica visível */
+    .board-scroll::after {
+      content: '⇠ arraste para explorar ⇢';
+      display: block; text-align: center;
+      font-size: .68rem; color: var(--muted); padding: .25rem 0 .4rem;
+      position: sticky; left: 0;
+    }
+  }
 </style>
 
 <div class="wrap">
